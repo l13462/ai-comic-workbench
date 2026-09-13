@@ -485,7 +485,7 @@ body{background:var(--bg-content);color:var(--txt);font-family:var(--sans);font-
     <ul>
       <li>AI 助手对话框头部 → 壁纸图标（在齿轮设置旁）→ 打开外观设置</li>
       <li>四种模式：默认纯色 / 内置渐变（3款）/ 图片URL / 本地上传 / 视频壁纸</li>
-      <li>视频壁纸：同目录需存在 <code>wallpaper_video.mp4</code>（分发版附带压缩版约15MB）；若加载失败，点「选择文件」选取本地视频</li>
+      <li>视频壁纸：同目录需存在 <code>wallpaper_video_web.mp4</code>（分发版附带压缩版约22MB）；加载失败自动尝试 <code>wallpaper_video.mp4</code>，都失败点「选择文件」选取本地视频</li>
       <li>暗化滑块（40-80%）保证文字可读；模糊滑块（0-6px）增强融合感</li>
       <li>设置存本机 localStorage，刷新不丢；「恢复默认」一键重置</li>
     </ul>
@@ -500,7 +500,7 @@ body{background:var(--bg-content);color:var(--txt);font-family:var(--sans);font-
 
     <h3><span class="num">7</span>常见问题</h3>
     <ul>
-      <li><b>视频壁纸黑屏/不播放？</b> → 点「选择文件」按钮重新选取本地视频文件，或确认同目录有 wallpaper_video.mp4</li>
+      <li><b>视频壁纸黑屏/不播放？</b> → 点「选择文件」按钮重新选取本地视频文件，或确认同目录有 wallpaper_video_web.mp4（部署版）/ wallpaper_video.mp4（本地版）</li>
       <li><b>AI 生成报 400？</b> → 看错误详情，常见原因：Key 无效/额度不足、上游内容过长（自动截断）、模型参数异常</li>
       <li><b>AI 生成报 401？</b> → API Key 无效或已过期，重新填写</li>
       <li><b>页面打开空白？</b> → 建议用 Chrome / Edge 最新版，双击 HTML 文件即可打开</li>
@@ -671,7 +671,7 @@ body{background:var(--bg-content);color:var(--txt);font-family:var(--sans);font-
     <div id="wpVideoGroup" style="display:none">
       <label style="font-size:12.5px;color:var(--txt2)">视频来源</label>
       <div style="display:flex;gap:8px;margin-top:6px">
-        <input type="text" id="wpVideoPath" placeholder="wallpaper_video.mp4（同目录）或 http(s):// 视频链接" style="flex:1">
+        <input type="text" id="wpVideoPath" placeholder="wallpaper_video_web.mp4（同目录）或 http(s):// 视频链接" style="flex:1">
         <button class="proj-btn ghost sm" id="wpVideoApply" style="flex:none">应用</button>
       </div>
       <div style="display:flex;gap:8px;margin-top:8px;align-items:center">
@@ -679,7 +679,7 @@ body{background:var(--bg-content);color:var(--txt);font-family:var(--sans);font-
         <span style="font-size:11px;color:var(--txt3);white-space:nowrap">选文件后立即播放（刷新需重选）</span>
       </div>
       <div class="err" id="wpVideoErr" style="display:none;margin-top:6px"></div>
-      <div class="wp-video-hint">视频壁纸需同目录存在 wallpaper_video.mp4（分发版附带压缩版）。若视频无法加载，请点"选择文件"按钮选取本地视频，或部署后通过 HTTP 访问。视频壁纸较吃性能，直播/录屏时建议切回静态壁纸。</div>
+      <div class="wp-video-hint">视频壁纸需同目录存在 wallpaper_video_web.mp4（分发版附带压缩版）。若加载失败会自动尝试 wallpaper_video.mp4，都失败请点"选择文件"按钮选取本地视频。视频壁纸较吃性能，直播/录屏时建议切回静态壁纸。</div>
     </div>
     <div class="wp-preview" id="wpPreview">
       <div class="pv-img" id="wpPreviewImg"></div>
@@ -1627,7 +1627,7 @@ function loadWallpaper(){
       wpState.image = 'linear-gradient(135deg,#0a0e1a 0%,#1a1f3a 50%,#0d1117 100%)';
       wpState.darken = 60;
       wpState.blur = 0;
-      wpState.videoSrc = 'wallpaper_video.mp4';
+      wpState.videoSrc = 'wallpaper_video_web.mp4';
     }
     // Compatibility: if old settings point to absolute local path (C:/...), fallback to preset
     if(wpState.mode === 'video' && wpState.videoSrc && /^([A-Za-z]:[\\/]|file:\/\/\/[A-Za-z]:)/.test(wpState.videoSrc)){
@@ -1635,7 +1635,7 @@ function loadWallpaper(){
       wpState.mode = 'preset';
       wpState.preset = 0;
       wpState.image = 'linear-gradient(135deg,#0a0e1a 0%,#1a1f3a 50%,#0d1117 100%)';
-      wpState.videoSrc = 'wallpaper_video.mp4';
+      wpState.videoSrc = 'wallpaper_video_web.mp4';
       setTimeout(function(){
         const el = document.createElement('div');
         el.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);background:var(--bg-card);border:1px solid var(--acc);color:var(--txt);padding:12px 20px;border-radius:10px;z-index:9999;font-size:13px;box-shadow:0 4px 20px rgba(0,0,0,.5)';
@@ -1677,18 +1677,32 @@ function applyWallpaper(){
         if(window._wpVideoTimer) clearTimeout(window._wpVideoTimer);
         window._wpVideoTimer = setTimeout(function(){
           if(video.readyState < 2 && wpState.mode==='video'){
-            console.log('Video wallpaper timeout - falling back to default');
+            // Auto-fallback: try alternate filename before giving up
+            const curSrc = wpState.videoSrc;
+            const altSrc = curSrc==='wallpaper_video_web.mp4' ? 'wallpaper_video.mp4' :
+                           curSrc==='wallpaper_video.mp4' ? 'wallpaper_video_web.mp4' : null;
+            if(altSrc && !window._wpVideoFallbackTried){
+              window._wpVideoFallbackTried = true;
+              console.log('Video timeout - trying alternate:', altSrc);
+              wpState.videoSrc = altSrc;
+              video.dataset.appliedSrc = '';
+              applyWallpaper();
+              return;
+            }
+            window._wpVideoFallbackTried = false;
+            console.log('Video wallpaper timeout - both files failed, falling back to default');
             const errEl = document.getElementById('wpVideoErr');
-            if(errEl){ errEl.textContent='视频加载超时（浏览器 file:// 限制或路径无效），已回退默认背景。请用"选择文件"按钮选取视频，或用本地 HTTP 服务器访问工作台。'; errEl.style.display='block'; }
+            if(errEl){ errEl.textContent='视频加载失败（已尝试 wallpaper_video_web.mp4 和 wallpaper_video.mp4）。请用"选择文件"按钮选取本地视频，或确认视频文件在同目录。'; errEl.style.display='block'; }
             wpState.mode = 'default';
             wpState.videoSrc = '';
             video.classList.remove('show');
             video.pause();
             applyWallpaper();
           }
-        }, 10000);
+        }, 8000);
       }
-      video.classList.add('show');
+      window._wpVideoFallbackTried = false;
+        video.classList.add('show');
       const p = video.play();
       if(p) p.catch(e=>{});
     }
@@ -1834,9 +1848,22 @@ function initWallpaper(){
     video.muted = true; video.loop = true; video.playsInline = true; video.preload = 'auto';
     video.addEventListener('error', function(){
       if(wpState.mode==='video'){
-        console.log('Video wallpaper failed to load:', wpState.videoSrc);
+        console.log('Video wallpaper error:', wpState.videoSrc);
+        // Auto-fallback: try alternate filename
+        const curSrc = wpState.videoSrc;
+        const altSrc = curSrc==='wallpaper_video_web.mp4' ? 'wallpaper_video.mp4' :
+                       curSrc==='wallpaper_video.mp4' ? 'wallpaper_video_web.mp4' : null;
+        if(altSrc && !window._wpVideoFallbackTried){
+          window._wpVideoFallbackTried = true;
+          console.log('Video error - trying alternate:', altSrc);
+          wpState.videoSrc = altSrc;
+          video.dataset.appliedSrc = '';
+          applyWallpaper();
+          return;
+        }
+        window._wpVideoFallbackTried = false;
         const errEl = document.getElementById('wpVideoErr');
-        if(errEl){ errEl.textContent='视频加载失败（路径无效或浏览器 file:// 限制），已回退默认背景。请用"选择文件"按钮选取，或检查路径。'; errEl.style.display='block'; }
+        if(errEl){ errEl.textContent='视频加载失败（已尝试 wallpaper_video_web.mp4 和 wallpaper_video.mp4）。请用"选择文件"按钮选取本地视频，或确认视频文件在同目录。'; errEl.style.display='block'; }
         wpState.mode = 'default'; wpState.videoSrc = '';
         applyWallpaper();
       }
@@ -1858,7 +1885,7 @@ function initWallpaper(){
     if(mode==='preset'){ wpState.image = WP_PRESETS[wpState.preset]; applyWallpaper(); }
     if(mode==='default'){ wpState.image = ''; wpState.videoSrc=''; applyWallpaper(); }
     if(mode==='video'){
-      if(!wpState.videoSrc) wpState.videoSrc = 'wallpaper_video.mp4';
+      if(!wpState.videoSrc) wpState.videoSrc = 'wallpaper_video_web.mp4';
       document.getElementById('wpVideoPath').value = wpState.videoSrc;
       document.getElementById('wpDarkenSlider').min = 50;
       if(wpState.darken < 50){ wpState.darken = 50; document.getElementById('wpDarkenSlider').value = 50; document.getElementById('wpDarkenVal').textContent = '50%'; }
