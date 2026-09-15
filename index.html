@@ -29,7 +29,7 @@ body{background:var(--bg-content);color:var(--txt);font-family:var(--sans);font-
 
 /* ============ 布局 ============ */
 .app{display:flex;height:100vh}
-.sidebar{width:248px;flex:none;background:var(--bg-side);border-right:1px solid var(--line);display:flex;flex-direction:column;transition:margin-left .25s ease;z-index:30}
+.sidebar{width:248px;flex:none;background:var(--bg-side);border-right:1px solid var(--line);display:flex;flex-direction:column;transition:margin-left .25s ease;z-index:30;overflow:hidden}
 .main{flex:1;display:flex;flex-direction:column;min-width:0}
 
 /* ============ 侧边栏 ============ */
@@ -37,7 +37,7 @@ body{background:var(--bg-content);color:var(--txt);font-family:var(--sans);font-
 .brand h1{font-size:16px;font-weight:700;letter-spacing:.5px;display:flex;align-items:center;gap:9px}
 .brand h1 svg{flex:none}
 .brand p{font-size:11.5px;color:var(--txt3);margin-top:5px}
-.nav{flex:1;overflow-y:auto;padding:12px 10px}
+.nav{flex:1;overflow-y:auto;min-height:0;padding:12px 10px}
 .nav-label{font-size:11px;color:var(--txt3);padding:14px 12px 6px;letter-spacing:1px}
 .nav-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;cursor:pointer;color:var(--txt2);font-size:13.5px;border-left:3px solid transparent;transition:.15s;user-select:none}
 .nav-item svg{flex:none;opacity:.7}
