@@ -334,6 +334,10 @@ body{background:var(--bg-content);color:var(--txt);font-family:var(--sans);font-
 .output-media-tab.active{background:var(--acc-dim);border-color:var(--acc);color:var(--acc2)}
 .output-media-hint{font-size:11.5px;color:var(--txt3);margin-top:6px;line-height:1.5}
 .output-img-preview{max-width:200px;max-height:150px;border-radius:8px;border:1px solid var(--line);margin-top:10px;object-fit:cover}
+.output-img-previews{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.output-pv-item{position:relative;width:88px;height:88px;border-radius:8px;overflow:hidden;border:1px solid var(--line);flex:none}
+.output-pv-item img{width:100%;height:100%;object-fit:cover;display:block}
+.output-pv-rm{position:absolute;top:2px;right:2px;width:18px;height:18px;line-height:16px;text-align:center;background:rgba(0,0,0,.65);color:#fff;border-radius:50%;cursor:pointer;font-size:12px;z-index:2}
 .output-form-actions{display:flex;gap:10px;margin-top:20px;justify-content:flex-end}
 
 
@@ -2666,33 +2670,53 @@ function setMediaMode(mode, existingOutput){
     if(url&&url.match(/\.(jpg|jpeg|png|gif|webp|bmp)(\?|$)/i)) container.innerHTML += '<img class="output-img-preview" src="'+url+'" onerror="this.style.display=\'none\'">';
   }else if(mode==='upload'){
     const existingData = o.media&&o.media.data?o.media.data:'';
-    container.innerHTML = '<input type="file" id="outMediaFile" accept="image/*" style="font-size:12px;color:var(--txt2)"><div id="outMediaSizeWarn" style="display:none;color:#f59e0b;font-size:11.5px;margin-top:6px">图片超过500KB，建议改用链接模式以节省存储空间。</div><img class="output-img-preview" id="outMediaPreview" '+(existingData?'src="'+existingData+'"':'style="display:none"')+'>';
+    container.innerHTML = '<input type="file" id="outMediaFile" accept="image/*" multiple style="font-size:12px;color:var(--txt2)"><div id="outMediaSizeWarn" style="display:none;color:#f59e0b;font-size:11.5px;margin-top:6px">单张图片超过500KB，建议改用链接模式以节省存储空间。</div><div class="output-img-previews" id="outMediaPreviews"></div>';
     const fi = document.getElementById('outMediaFile');
     if(fi) fi.addEventListener('change', handleOutputImageUpload);
+    if(existingData) renderOutputPreviews([existingData]);
   }
 }
 
 function handleOutputImageUpload(e){
-  const file = e.target.files[0];
-  if(!file||!file.type.startsWith('image/')){ alert('请选择图片文件'); return; }
+  const files = Array.from(e.target.files||[]).filter(f=>f.type.startsWith('image/'));
+  if(!files.length){ alert('请选择图片文件'); return; }
   const warn = document.getElementById('outMediaSizeWarn');
-  const preview = document.getElementById('outMediaPreview');
-  if(warn) warn.style.display = file.size>500*1024?'block':'none';
-  const reader = new FileReader();
-  reader.onload = function(ev){
-    const img = new Image();
-    img.onload = function(){
-      let w=img.width,h=img.height,maxW=1200;
-      if(w>maxW){ h=Math.round(h*maxW/w); w=maxW; }
-      const canvas=document.createElement('canvas'); canvas.width=w; canvas.height=h;
-      canvas.getContext('2d').drawImage(img,0,0,w,h);
-      const dataUrl = canvas.toDataURL('image/jpeg',0.8);
-      if(preview){ preview.src=dataUrl; preview.style.display='block'; }
-      window._outputUploadData = dataUrl;
+  if(warn) warn.style.display = files.some(f=>f.size>500*1024)?'block':'none';
+  let pending = files.length;
+  files.forEach((file, idx)=>{
+    const reader = new FileReader();
+    reader.onload = function(ev){
+      const img = new Image();
+      img.onload = function(){
+        let w=img.width,h=img.height,maxW=1200;
+        if(w>maxW){ h=Math.round(h*maxW/w); w=maxW; }
+        const canvas=document.createElement('canvas'); canvas.width=w; canvas.height=h;
+        canvas.getContext('2d').drawImage(img,0,0,w,h);
+        const dataUrl = canvas.toDataURL('image/jpeg',0.8);
+        if(!window._outputUploadDataList) window._outputUploadDataList=[];
+        window._outputUploadDataList.push(dataUrl);
+        if(idx===0) window._outputUploadData = dataUrl;
+        renderOutputPreviews(window._outputUploadDataList);
+        pending--; if(pending<=0){ /* done */ }
+      };
+      img.src = ev.target.result;
     };
-    img.src = ev.target.result;
-  };
-  reader.readAsDataURL(file);
+    reader.readAsDataURL(file);
+  });
+}
+
+function renderOutputPreviews(list){
+  const box = document.getElementById('outMediaPreviews');
+  if(!box) return;
+  if(!list||!list.length){ box.innerHTML=''; return; }
+  box.innerHTML = list.map((d,i)=>'<div class="output-pv-item"><img src="'+d+'"><span class="output-pv-rm" data-i="'+i+'" onclick="removeOutputPreview('+i+')">×</span></div>').join('');
+}
+
+function removeOutputPreview(i){
+  const list = window._outputUploadDataList||[];
+  list.splice(i,1);
+  window._outputUploadData = list.length?list[0]:null;
+  renderOutputPreviews(list);
 }
 
 function saveOutputForm(){
@@ -2709,7 +2733,8 @@ function saveOutputForm(){
     const url = urlEl?urlEl.value.trim():'';
     if(url){ if(type==='video') videoUrl=url; else media={type:'url',url:url}; }
   }else if(mode==='upload'){
-    if(window._outputUploadData) media={type:'base64',data:window._outputUploadData};
+    const upList = window._outputUploadDataList||(window._outputUploadData?[window._outputUploadData]:[]);
+    if(upList.length) media={type:'base64',data:upList[0]};
     else if(editingOutputId){ const d=getDrama(currentDramaId); const ex=(d.outputs||[]).find(x=>x.id===editingOutputId); if(ex&&ex.media&&ex.media.data) media=ex.media; }
   }
   const d = getDrama(currentDramaId);
@@ -2719,11 +2744,21 @@ function saveOutputForm(){
     const idx = d.outputs.findIndex(x=>x.id===editingOutputId);
     if(idx>=0) d.outputs[idx] = {...d.outputs[idx], type, title, content, note, media, videoUrl};
   }else{
-    d.outputs.unshift({id:'out_'+Date.now()+'_'+Math.random().toString(36).substr(2,5), type, title, content, note, media, videoUrl, createdAt:nowStr()});
+    const upList = window._outputUploadDataList||(window._outputUploadData?[window._outputUploadData]:[]);
+    if(upList.length>1){
+      const items = upList.map((data,i)=>{
+        const t = i===0?title:(title?title+'（'+(i+1)+'）':'图片 '+(i+1));
+        return {id:'out_'+Date.now()+'_'+Math.random().toString(36).substr(2,5)+'_'+i, type, title:t, content:i===0?content:'', note, media:{type:'base64',data:data}, videoUrl:null, createdAt:nowStr()};
+      });
+      d.outputs.unshift.apply(d.outputs, items);
+    }else{
+      d.outputs.unshift({id:'out_'+Date.now()+'_'+Math.random().toString(36).substr(2,5), type, title, content, note, media, videoUrl, createdAt:nowStr()});
+    }
   }
   try{
     updateDrama(currentDramaId, drama=>{ drama.outputs = d.outputs; });
     window._outputUploadData = null;
+    window._outputUploadDataList = null;
     editingOutputId = null;
     renderDramaOutputs();
   }catch(e){
